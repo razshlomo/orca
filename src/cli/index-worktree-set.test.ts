@@ -393,9 +393,11 @@ describe('orca cli worktree awareness', () => {
   })
 
   it.each([
-    ['--unread', true],
-    ['--read', false]
-  ])('passes %s through worktree.set as isUnread', async (flag, isUnread) => {
+    ['id:repo::/tmp/repo/child', '--unread', true],
+    ['id:repo::/tmp/repo/child', '--read', false],
+    ['id:folder:fixture', '--unread', true],
+    ['id:folder:fixture', '--read', false]
+  ])('passes %s %s through worktree.set as isUnread', async (selector, flag, isUnread) => {
     queueFixtures(
       callMock,
       okFixture('req_set_unread', {
@@ -404,15 +406,18 @@ describe('orca cli worktree awareness', () => {
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(
-      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', flag, '--json'],
-      '/tmp/repo'
-    )
+    await main(['worktree', 'set', '--worktree', selector, flag, '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith(
-      'worktree.set',
-      expect.objectContaining({ worktree: 'id:repo::/tmp/repo/child', isUnread })
-    )
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('worktree.set', {
+      worktree: selector,
+      displayName: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      workspaceStatus: undefined,
+      isUnread,
+      parentWorktree: undefined,
+      noParent: false
+    })
   })
 
   it('leaves isUnread unchanged when neither --unread nor --read is passed', async () => {
@@ -428,12 +433,17 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock.mock.calls[0]?.[1]).toHaveProperty('isUnread', undefined)
+    expect(JSON.stringify(callMock.mock.calls[0]?.[1])).not.toContain('isUnread')
   })
 
   it.each([
     [['--unread', '--read'], 'Choose either --unread or --read'],
+    [['--read', '--unread'], 'Choose either --unread or --read'],
     [['--read', 'yes'], '--read takes no value'],
-    [['--unread=false'], '--unread takes no value']
+    [['--read=false'], '--read takes no value'],
+    [['--read='], '--read takes no value'],
+    [['--unread=false'], '--unread takes no value'],
+    [['--unread='], '--unread takes no value']
   ])('rejects %j on worktree.set before resolving selectors', async (flags, message) => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
